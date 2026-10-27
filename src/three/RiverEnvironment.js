@@ -1,0 +1,316 @@
+import * as THREE from "three";
+
+/**
+ * 3D River Environment:
+ * - Flowing procedural water surface
+ * - Natural 3D curved riverbanks with elevation
+ * - Riverbed
+ * - Varied 3D obstacles (faceted boulders, driftwood logs)
+ * - Floating finish line marker buoys and banner
+ */
+export class RiverEnvironment {
+  constructor(scene) {
+    this.scene = scene;
+    this.obstacles = [];
+    this.finishZ = -300;
+
+    // Define mathematical curvature of the river centerline along Z
+    this.getCenterlineX = (z) => Math.sin(z * 0.018) * 5.5 + Math.sin(z * 0.045) * 2.2;
+    this.riverHalfWidth = 13.5;
+
+    this.createEnvironment();
+  }
+
+  createEnvironment() {
+    this.group = new THREE.Group();
+
+    // 1. Riverbed (Underneath water)
+    const riverbedGeo = new THREE.PlaneGeometry(80, 480, 16, 48);
+    riverbedGeo.rotateX(-Math.PI / 2);
+    const riverbedMat = new THREE.MeshStandardMaterial({
+      color: 0x072b36,
+      roughness: 0.9,
+    });
+    this.riverbedMesh = new THREE.Mesh(riverbedGeo, riverbedMat);
+    this.riverbedMesh.position.set(0, -1.4, -140);
+    this.riverbedMesh.receiveShadow = true;
+    this.group.add(this.riverbedMesh);
+
+    // 2. Animated Flowing Water Surface
+    const waterGeo = new THREE.PlaneGeometry(36, 460, 32, 128);
+    waterGeo.rotateX(-Math.PI / 2);
+
+    // Curve water geometry slightly to follow the river centerline
+    const pos = waterGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const z = pos.getZ(i);
+      const cx = this.getCenterlineX(z - 140);
+      pos.setX(i, pos.getX(i) + cx);
+    }
+    waterGeo.computeVertexNormals();
+
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x13768e,
+      roughness: 0.22,
+      metalness: 0.15,
+      transparent: true,
+      opacity: 0.88,
+    });
+    this.waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    this.waterMesh.position.set(0, 0, -140);
+    this.waterMesh.receiveShadow = true;
+    this.group.add(this.waterMesh);
+
+    // 3. Natural 3D Riverbanks
+    this.createRiverbanks();
+
+    // 4. 3D Obstacles
+    this.createObstacles();
+
+    // 5. Finish Line
+    this.createFinishLine();
+
+    this.scene.add(this.group);
+  }
+
+  createRiverbanks() {
+    const bankSegments = 60;
+    const length = 460;
+    const startZ = 70;
+    const dz = length / bankSegments;
+
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x246331, roughness: 0.8 });
+    const sandMat = new THREE.MeshStandardMaterial({ color: 0x6e6047, roughness: 0.9 });
+
+    // Generate bank chunks along both sides of the river
+    for (let i = 0; i <= bankSegments; i++) {
+      const z = startZ - i * dz;
+      const cx = this.getCenterlineX(z);
+      const leftX = cx - this.riverHalfWidth;
+      const rightX = cx + this.riverHalfWidth;
+
+      // Left Bank Mound
+      const leftMound = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(4.2 + (i % 3) * 0.8, 1),
+        grassMat
+      );
+      leftMound.scale.set(2.2, 0.7, 1.8);
+      leftMound.position.set(leftX - 4.5, 0.9, z);
+      leftMound.receiveShadow = true;
+      leftMound.castShadow = true;
+      this.group.add(leftMound);
+
+      // Left shoreline sand rim
+      const leftSand = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 2.8, 0.6, 6),
+        sandMat
+      );
+      leftSand.position.set(leftX - 1.2, 0.1, z);
+      leftSand.receiveShadow = true;
+      this.group.add(leftSand);
+
+      // Right Bank Mound
+      const rightMound = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(4.2 + ((i + 1) % 3) * 0.8, 1),
+        grassMat
+      );
+      rightMound.scale.set(2.2, 0.7, 1.8);
+      rightMound.position.set(rightX + 4.5, 0.9, z);
+      rightMound.receiveShadow = true;
+      rightMound.castShadow = true;
+      this.group.add(rightMound);
+
+      // Right shoreline sand rim
+      const rightSand = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 2.8, 0.6, 6),
+        sandMat
+      );
+      rightSand.position.set(rightX + 1.2, 0.1, z);
+      rightSand.receiveShadow = true;
+      this.group.add(rightSand);
+
+      // Occasional bank foliage / pine trees
+      if (i % 3 === 0) {
+        this.createPineTree(leftX - 7.5, z + 1.5);
+        this.createPineTree(rightX + 7.5, z - 1.5);
+      }
+    }
+  }
+
+  createPineTree(x, z) {
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2e15, roughness: 0.9 });
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x164223, roughness: 0.7 });
+
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 2, 6), trunkMat);
+    trunk.position.set(x, 1.5, z);
+    trunk.castShadow = true;
+    this.group.add(trunk);
+
+    const foliage1 = new THREE.Mesh(new THREE.ConeGeometry(2.0, 3.2, 6), foliageMat);
+    foliage1.position.set(x, 3.2, z);
+    foliage1.castShadow = true;
+    const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 6), foliageMat);
+    foliage2.position.set(x, 4.6, z);
+    foliage2.castShadow = true;
+    this.group.add(foliage1, foliage2);
+  }
+
+  createObstacles() {
+    const rockMat = new THREE.MeshStandardMaterial({
+      color: 0x5a544c,
+      roughness: 0.75,
+      metalness: 0.1,
+    });
+
+    const woodMat = new THREE.MeshStandardMaterial({
+      color: 0x5c3c24,
+      roughness: 0.7,
+    });
+
+    const obstacleConfigs = [
+      { z: -25, offsetX: -4.5, type: "boulder", scale: 1.4, radius: 1.8 },
+      { z: -55, offsetX: 4.2, type: "driftwood", scale: 1.3, radius: 2.1, rotY: 0.4 },
+      { z: -90, offsetX: -2.0, type: "boulder", scale: 1.6, radius: 2.0 },
+      { z: -125, offsetX: 5.5, type: "boulder", scale: 1.3, radius: 1.7 },
+      { z: -160, offsetX: -5.0, type: "driftwood", scale: 1.4, radius: 2.2, rotY: -0.3 },
+      { z: -195, offsetX: 2.8, type: "boulder", scale: 1.5, radius: 1.9 },
+      { z: -230, offsetX: -3.8, type: "boulder", scale: 1.4, radius: 1.8 },
+      { z: -265, offsetX: 3.5, type: "driftwood", scale: 1.3, radius: 2.0, rotY: 0.25 },
+    ];
+
+    for (const conf of obstacleConfigs) {
+      const cx = this.getCenterlineX(conf.z);
+      const x = cx + conf.offsetX;
+      const y = 0.2;
+
+      let mesh;
+      if (conf.type === "boulder") {
+        mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(conf.radius, 1), rockMat);
+        mesh.scale.set(1.1, 0.75, 1.0);
+      } else {
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, conf.radius * 2.2, 8), woodMat);
+        mesh.rotation.z = Math.PI / 2;
+        if (conf.rotY) mesh.rotation.y = conf.rotY;
+      }
+
+      mesh.position.set(x, y, conf.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+
+      this.obstacles.push({
+        x,
+        z: conf.z,
+        radius: conf.radius,
+        type: conf.type,
+        mesh,
+      });
+    }
+  }
+
+  createFinishLine() {
+    const z = this.finishZ;
+    const cx = this.getCenterlineX(z);
+    const leftX = cx - (this.riverHalfWidth - 1.5);
+    const rightX = cx + (this.riverHalfWidth - 1.5);
+
+    // Buoy Left
+    const buoyMat = new THREE.MeshStandardMaterial({ color: 0xdd3838, roughness: 0.3 });
+    const stripeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+
+    this.leftBuoy = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 12), buoyMat);
+    this.leftBuoy.position.set(leftX, 0.4, z);
+    this.leftBuoy.castShadow = true;
+    this.group.add(this.leftBuoy);
+
+    // Buoy Right
+    this.rightBuoy = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 12), buoyMat);
+    this.rightBuoy.position.set(rightX, 0.4, z);
+    this.rightBuoy.castShadow = true;
+    this.group.add(this.rightBuoy);
+
+    // Checkered banner ribbon spanning the river
+    const bannerLength = rightX - leftX;
+    const bannerGeo = new THREE.PlaneGeometry(bannerLength, 1.8, 16, 2);
+    bannerGeo.rotateY(Math.PI);
+
+    // Generate checkered canvas texture
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    for (let x = 0; x < 256; x += 32) {
+      for (let y = 0; y < 64; y += 32) {
+        ctx.fillStyle = (x / 32 + y / 32) % 2 === 0 ? "#ffffff" : "#1a202c";
+        ctx.fillRect(x, y, 32, 32);
+      }
+    }
+    const bannerTex = new THREE.CanvasTexture(canvas);
+    bannerTex.wrapS = THREE.RepeatWrapping;
+    bannerTex.repeat.set(8, 1);
+
+    const bannerMat = new THREE.MeshStandardMaterial({
+      map: bannerTex,
+      side: THREE.DoubleSide,
+      roughness: 0.5,
+    });
+    this.bannerMesh = new THREE.Mesh(bannerGeo, bannerMat);
+    this.bannerMesh.position.set(cx, 3.2, z);
+    this.group.add(this.bannerMesh);
+  }
+
+  update(time) {
+    // Water surface subtle undulating flow ripple
+    const pos = this.waterMesh.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += 4) {
+      const vz = pos.getZ(i);
+      const vx = pos.getX(i);
+      const wave = Math.sin(time * 3.5 + vz * 0.15 + vx * 0.2) * 0.08;
+      pos.setY(i, wave);
+    }
+    this.waterMesh.geometry.computeVertexNormals();
+    this.waterMesh.geometry.attributes.position.needsUpdate = true;
+
+    // Bobbing buoys at finish line
+    if (this.leftBuoy && this.rightBuoy) {
+      this.leftBuoy.position.y = 0.4 + Math.sin(time * 3) * 0.08;
+      this.rightBuoy.position.y = 0.4 + Math.cos(time * 3.2) * 0.08;
+    }
+  }
+
+  checkRiverbankCollision(x, z) {
+    const cx = this.getCenterlineX(z);
+    const leftLimit = cx - (this.riverHalfWidth - 2.0);
+    const rightLimit = cx + (this.riverHalfWidth - 2.0);
+
+    if (x < leftLimit) {
+      return { collided: true, normalX: 1, penetration: leftLimit - x };
+    }
+    if (x > rightLimit) {
+      return { collided: true, normalX: -1, penetration: x - rightLimit };
+    }
+    return { collided: false };
+  }
+
+  checkObstacleCollisions(boatX, boatZ, boatRadius = 1.35) {
+    for (const ob of this.obstacles) {
+      const dx = boatX - ob.x;
+      const dz = boatZ - ob.z;
+      const dist = Math.hypot(dx, dz);
+      const minDist = ob.radius + boatRadius;
+
+      if (dist < minDist) {
+        const nx = dx / (dist || 1);
+        const nz = dz / (dist || 1);
+        return {
+          collided: true,
+          obstacle: ob,
+          normalX: nx,
+          normalZ: nz,
+          penetration: minDist - dist,
+        };
+      }
+    }
+    return { collided: false };
+  }
+}

@@ -3,12 +3,15 @@
  * Manages dual-player keyboard controls:
  * Player 1: W, A, S, D
  * Player 2: Arrow Keys (Up, Down, Left, Right)
- * Also handles Space (start) and R (restart), preventing page scroll.
+ * Also handles Space (start) and R (restart) with edge-triggered consumption,
+ * preventing browser scrolling.
  */
 
 export class InputManager {
   constructor(domElement = window) {
     this.keys = {};
+    this.spaceConsumed = false;
+    this.restartConsumed = false;
     this.domElement = domElement;
 
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -33,6 +36,12 @@ export class InputManager {
   onKeyUp(e) {
     const key = e.key.toLowerCase();
     this.keys[key] = false;
+    if (key === " " || key === "space") {
+      this.spaceConsumed = false;
+    }
+    if (key === "r") {
+      this.restartConsumed = false;
+    }
   }
 
   getPlayer1() {
@@ -47,6 +56,22 @@ export class InputManager {
       forward: (this.keys["arrowup"] ? 1 : 0) - (this.keys["arrowdown"] ? 1 : 0),
       steering: (this.keys["arrowright"] ? 1 : 0) - (this.keys["arrowleft"] ? 1 : 0),
     };
+  }
+
+  consumeSpace() {
+    if ((this.keys[" "] || this.keys["space"]) && !this.spaceConsumed) {
+      this.spaceConsumed = true;
+      return true;
+    }
+    return false;
+  }
+
+  consumeRestart() {
+    if (this.keys["r"] && !this.restartConsumed) {
+      this.restartConsumed = true;
+      return true;
+    }
+    return false;
   }
 
   isSpacePressed() {

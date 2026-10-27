@@ -83,30 +83,35 @@ Tasks:
 
 **Status:** Completed.
 
-### Phase 2 — Establish the 3D Game Foundation
+### Phase 2 — Establish the 3D Game Foundation (COMPLETED)
 
 **Goal:** Build the actual game in 3D using Three.js. Camera movement, a 3D world, and shared boat physics are core requirements—not future enhancements.
 
 #### Technology
 - **Three.js** — 3D rendering, models, lighting, materials, water and camera.
 - **Vite** — development server and build tooling.
-- **Rapier** — evaluate for physics if needed; begin with a simple custom boat movement model if that is sufficient.
-- **JavaScript** — retain the existing project language.
+- **Rapier** — evaluated; lightweight custom kinematic model currently sufficient for smooth 60 FPS gameplay.
+- **JavaScript** — retained existing project language.
 
 #### Tasks
-- **2.1 — Protect the Existing Prototype**: Preserve working 2D Phaser version (in `src/main.phaser.js` or separate entry) so the 2D prototype remains available for side-by-side comparison without being deleted or overwritten.
-- **2.2 — Create the 3D World**: Set up Three.js scene, perspective camera, renderer with shadow maps, sky, atmospheric fog, directional river sunlight, 3D river environment with visible banks, placeholder boat, and obstacles.
-- **2.3 — Implement the Third-Person Camera**: Follow the boat from behind and above with look-ahead smoothing, subtle collision shake, and boat-turning camera lag.
-- **2.4 — Implement Shared Two-Player Boat Controls**: Player 1 (W/A/S/D) and Player 2 (Arrow keys) controlling the same 3D boat physics (acceleration, drag, rotational inertia, boundary deflections, and comedic spinouts).
-- **2.5 — Test the Core Experience**: Coordinated paddling, conflicting steering chaos, river boundaries, keyboard focus, and browser 60 FPS performance.
+- [x] **2.1 — Protect Existing Prototype**: Preserved complete Phase 1 2D Phaser game in `src/main.phaser.js` with dual-mode runtime launcher in `src/main.js`.
+- [x] **2.2 — Create the 3D World**: Three.js scene, perspective camera, WebGL renderer with PCF soft shadows, directional sunlight tracking the boat, atmospheric fog, curved river channel, consistent width banks, obstacles, and finish buoys.
+- [x] **2.3 — Implement Third-Person Camera**: Elevated 3rd-person follow camera with look-ahead heading tracking along river curves, clamped bank roll, and controlled collision trauma shake.
+- [x] **2.4 — Implement Shared Two-Player Controls & Fixes**:
+  - Independent and combined input integration for Player 1 (WASD) and Player 2 (Arrows).
+  - Aligned physical velocity vector with 3D mesh Y-rotation.
+  - Implemented debounced collision impact cooldown preventing multi-frame repeated hits during continuous contact.
+  - Added edge-triggered Space and R keys to prevent rapid-fire restarts.
+- [x] **2.5 — Visual Themes & Day Mode**:
+  - Implemented vibrant, sunny Day Theme as default (cyan sky, sunny fog, warm golden sunlight, aqua river water, bright glassmorphic cards).
+  - Implemented interactive instant Day/Night mode toggle button in HUD.
+  - Tested dual-player independence, conflicting input cancellation, and collision debouncing via unit tests.
 
-**Done when:**
-- A working 3D scene renders in the browser.
-- The boat moves through a 3D river.
-- Both players control the same boat independently on one keyboard.
-- The third-person camera follows and looks ahead smoothly.
-- Basic collisions and boat physics work.
-- The existing Phaser prototype remains available for comparison.
+**Status:** Completed.
+
+**Remaining Limitations for Phase 2:**
+- Sound effects (paddle splashes, collision thuds) deferred to Phase 5.
+- Models currently use procedural low-poly geometries; external glTF character models to be added in Phase 3/4.
 
 ### Phase 3 --- Make the Boat Physics Feel Funny
 

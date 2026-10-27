@@ -5,41 +5,39 @@ import * as THREE from "three";
  * - Elevated 3rd-person follow perspective
  * - Smooth position lerping with configurable distance, height, and smoothing
  * - Heading tracking with look-ahead targeting along river bends
- * - Boat turning camera lag and tilt
- * - Traumatic collision impact screen shake
+ * - Gentle boat turning camera lag and bank tilt
+ * - Controlled collision impact screen shake without motion sickness
  */
 export class ThirdPersonCamera {
   constructor(camera, options = {}) {
     this.camera = camera;
 
     // Configurable camera parameters
-    this.distance = options.distance || 13.5;
-    this.height = options.height || 7.2;
-    this.lookAhead = options.lookAhead || 14.0;
-    this.posSmoothing = options.posSmoothing || 0.085;
-    this.lookSmoothing = options.lookSmoothing || 0.12;
+    this.distance = options.distance || 14.8;
+    this.height = options.height || 7.6;
+    this.lookAhead = options.lookAhead || 15.5;
+    this.posSmoothing = options.posSmoothing || 0.088;
+    this.lookSmoothing = options.lookSmoothing || 0.11;
 
     this.currentLookAt = new THREE.Vector3(0, 1.2, 0);
-    this.cameraOffset = new THREE.Vector3(0, 0, 0);
     this.smoothedHeading = 0;
 
-    // Collision shake state
+    // Controlled collision shake state
     this.trauma = 0;
   }
 
-  triggerShake(intensity = 0.6) {
-    this.trauma = Math.min(this.trauma + intensity, 1.2);
+  triggerShake(intensity = 0.5) {
+    this.trauma = Math.min(this.trauma + intensity, 0.9);
   }
 
   update(boat, dt) {
     const safeDt = Math.min(dt, 0.05);
 
     // Smooth heading tracking with slight lag to create a pleasant turning feel
-    // Blend heading so extreme 360 spins don't violently whip the camera
     this.smoothedHeading = THREE.MathUtils.lerp(
       this.smoothedHeading,
       boat.heading,
-      0.14
+      0.13
     );
 
     const fwdX = Math.sin(this.smoothedHeading);
@@ -56,7 +54,7 @@ export class ThirdPersonCamera {
     this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, targetCamY, lerpFactor);
     this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetCamZ, lerpFactor);
 
-    // Look-ahead point in front of boat so players anticipate river bends & hazards
+    // Look-ahead point in front of boat along smoothed heading
     const targetLookX = boat.x + fwdX * this.lookAhead;
     const targetLookY = boat.y + 1.2;
     const targetLookZ = boat.z + fwdZ * this.lookAhead;
@@ -66,19 +64,19 @@ export class ThirdPersonCamera {
     this.currentLookAt.y = THREE.MathUtils.lerp(this.currentLookAt.y, targetLookY, lookLerpFactor);
     this.currentLookAt.z = THREE.MathUtils.lerp(this.currentLookAt.z, targetLookZ, lookLerpFactor);
 
-    // Apply collision trauma camera shake
+    // Apply controlled collision trauma shake (clamped to prevent discomfort)
     if (this.trauma > 0) {
-      const shakeFactor = this.trauma * this.trauma * 0.45;
+      const shakeFactor = Math.min(this.trauma * 0.22, 0.2);
       this.camera.position.x += (Math.random() - 0.5) * shakeFactor;
       this.camera.position.y += (Math.random() - 0.5) * shakeFactor;
-      this.currentLookAt.x += (Math.random() - 0.5) * shakeFactor * 0.6;
-      this.trauma = Math.max(0, this.trauma - safeDt * 2.8);
+      this.currentLookAt.x += (Math.random() - 0.5) * shakeFactor * 0.5;
+      this.trauma = Math.max(0, this.trauma - safeDt * 3.2);
     }
 
     this.camera.lookAt(this.currentLookAt);
 
-    // Dynamic bank turning tilt
-    const bankRoll = -boat.turnSpeed * 0.035;
+    // Gentle bank turning tilt (strictly clamped to avoid disorientation)
+    const bankRoll = THREE.MathUtils.clamp(-boat.turnSpeed * 0.024, -0.055, 0.055);
     this.camera.rotation.z += bankRoll;
   }
 

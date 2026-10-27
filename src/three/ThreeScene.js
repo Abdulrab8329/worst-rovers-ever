@@ -7,7 +7,7 @@ import { InputManager } from "./InputManager.js";
 /**
  * ThreeScene - Core 3D Scene Controller
  * Manages Three.js scene lifecycle, renderer, lighting, shadows, physics loops,
- * and HUD overlay.
+ * debounced collision handling, and HUD overlay.
  */
 export class ThreeScene {
   constructor(containerElement, onSwitchTo2D) {
@@ -17,10 +17,14 @@ export class ThreeScene {
     this.started = false;
     this.finished = false;
     this.startTime = 0;
+    this.finalTime = 0;
     this.isRunning = false;
+
+    this.currentTheme = localStorage.getItem("wre_theme") || "day";
 
     this.initScene();
     this.createHUD();
+    this.setTheme(this.currentTheme);
     this.input = new InputManager(window);
 
     this.clock = new THREE.Clock();
@@ -37,11 +41,11 @@ export class ThreeScene {
 
     // 1. Scene & Atmosphere
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0e313f);
-    this.scene.fog = new THREE.FogExp2(0x0e313f, 0.0072);
+    this.scene.background = new THREE.Color(0x8cd3ea);
+    this.scene.fog = new THREE.FogExp2(0x9de0f5, 0.0055);
 
     // 2. Camera
-    this.camera = new THREE.PerspectiveCamera(58, width / height, 0.4, 500);
+    this.camera = new THREE.PerspectiveCamera(56, width / height, 0.4, 500);
 
     // 3. Renderer with PCF Soft Shadows
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -56,8 +60,8 @@ export class ThreeScene {
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Lighting
-    const hemiLight = new THREE.HemisphereLight(0xbce6ff, 0x1f4726, 0.75);
-    this.scene.add(hemiLight);
+    this.hemiLight = new THREE.HemisphereLight(0xf2faff, 0x3e743a, 0.95);
+    this.scene.add(this.hemiLight);
 
     this.sunLight = new THREE.DirectionalLight(0xfff7e6, 1.25);
     this.sunLight.position.set(-25, 55, 30);
@@ -78,16 +82,16 @@ export class ThreeScene {
     this.boat = new Boat();
     this.scene.add(this.boat.mesh);
 
-    // Make sun track boat so shadow resolution stays optimal
+    // Track boat region for sharp shadows
     this.sunLight.target = this.boat.mesh;
 
     // 6. Camera Controller
     this.cameraController = new ThirdPersonCamera(this.camera, {
-      distance: 14.0,
-      height: 7.2,
-      lookAhead: 14.5,
+      distance: 14.8,
+      height: 7.6,
+      lookAhead: 15.5,
       posSmoothing: 0.088,
-      lookSmoothing: 0.12,
+      lookSmoothing: 0.11,
     });
     this.cameraController.snapToBoat(this.boat);
   }
@@ -105,7 +109,8 @@ export class ThreeScene {
           <span id="hud-speed">⚡ Speed: 0</span>
         </div>
         <div class="hud-actions">
-          <button id="btn-toggle-view" class="hud-btn hud-btn-mode">Switch to 2D Phaser</button>
+          <button id="btn-toggle-theme" class="hud-btn hud-btn-theme">🌙 Night Mode</button>
+          <button id="btn-toggle-view" class="hud-btn hud-btn-mode">Switch to 2D</button>
         </div>
       </div>
 
@@ -113,12 +118,12 @@ export class ThreeScene {
         <h2>🛶 WORST ROWERS EVER (3D) 🛶</h2>
         <div class="control-grid">
           <div class="player-box p1-box">
-            <span class="player-badge p1-badge">PLAYER 1 (Blue)</span>
+            <span class="player-badge p1-badge">PLAYER 1 (Blue — Front)</span>
             <div class="key-hints"><strong>W / S</strong> : Row Forward / Back</div>
             <div class="key-hints"><strong>A / D</strong> : Turn Left / Right</div>
           </div>
           <div class="player-box p2-box">
-            <span class="player-badge p2-badge">PLAYER 2 (Orange)</span>
+            <span class="player-badge p2-badge">PLAYER 2 (Orange — Rear)</span>
             <div class="key-hints"><strong>↑ / ↓</strong> : Row Forward / Back</div>
             <div class="key-hints"><strong>← / →</strong> : Turn Left / Right</div>
           </div>
@@ -153,6 +158,13 @@ export class ThreeScene {
     this.hudContainer.querySelector("#btn-start").addEventListener("click", () => this.startGame());
     this.hudContainer.querySelector("#btn-rematch").addEventListener("click", () => this.restartGame());
 
+    const themeBtn = this.hudContainer.querySelector("#btn-toggle-theme");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        this.setTheme(this.currentTheme === "day" ? "dark" : "day");
+      });
+    }
+
     const toggleBtn = this.hudContainer.querySelector("#btn-toggle-view");
     if (toggleBtn && this.onSwitchTo2D) {
       toggleBtn.addEventListener("click", () => {
@@ -162,9 +174,75 @@ export class ThreeScene {
     }
   }
 
+  setTheme(themeName) {
+    this.currentTheme = themeName;
+    try {
+      localStorage.setItem("wre_theme", themeName);
+    } catch (_) {}
+
+    const themeBtn = this.hudContainer ? this.hudContainer.querySelector("#btn-toggle-theme") : null;
+
+    if (themeName === "day") {
+      document.body.classList.remove("theme-dark");
+      document.body.classList.add("theme-day");
+
+      // Beautiful bright sunny daytime scenery
+      if (this.scene) {
+        this.scene.background.setHex(0x8cd3ea);
+        if (this.scene.fog) {
+          this.scene.fog.color.setHex(0x9de0f5);
+          this.scene.fog.density = 0.0052;
+        }
+      }
+      if (this.sunLight) {
+        this.sunLight.color.setHex(0xfff6e2);
+        this.sunLight.intensity = 1.6;
+      }
+      if (this.hemiLight) {
+        this.hemiLight.color.setHex(0xf4faff);
+        this.hemiLight.groundColor.setHex(0x3e743a);
+        this.hemiLight.intensity = 0.95;
+      }
+      if (this.river) {
+        this.river.setTheme("day");
+      }
+      if (themeBtn) {
+        themeBtn.textContent = "🌙 Night Mode";
+      }
+    } else {
+      document.body.classList.remove("theme-day");
+      document.body.classList.add("theme-dark");
+
+      // Atmospheric dark midnight river
+      if (this.scene) {
+        this.scene.background.setHex(0x0e313f);
+        if (this.scene.fog) {
+          this.scene.fog.color.setHex(0x0e313f);
+          this.scene.fog.density = 0.0072;
+        }
+      }
+      if (this.sunLight) {
+        this.sunLight.color.setHex(0xfff7e6);
+        this.sunLight.intensity = 1.25;
+      }
+      if (this.hemiLight) {
+        this.hemiLight.color.setHex(0xbce6ff);
+        this.hemiLight.groundColor.setHex(0x1f4726);
+        this.hemiLight.intensity = 0.75;
+      }
+      if (this.river) {
+        this.river.setTheme("dark");
+      }
+      if (themeBtn) {
+        themeBtn.textContent = "☀️ Day Mode";
+      }
+    }
+  }
+
   startGame() {
     if (!this.started) {
       this.started = true;
+      this.finished = false;
       this.startTime = performance.now();
       this.startOverlay.style.display = "none";
     }
@@ -176,6 +254,7 @@ export class ThreeScene {
     this.started = true;
     this.finished = false;
     this.startTime = performance.now();
+    this.finalTime = 0;
     this.finishOverlay.style.display = "none";
     this.startOverlay.style.display = "none";
   }
@@ -201,11 +280,11 @@ export class ThreeScene {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const elapsedTime = this.clock.getElapsedTime();
 
-    // Check keyboard shortcuts
-    if (this.input.isSpacePressed() && !this.started) {
+    // Edge-triggered key shortcuts
+    if (this.input.consumeSpace() && !this.started) {
       this.startGame();
     }
-    if (this.input.isRestartPressed() && (this.started || this.finished)) {
+    if (this.input.consumeRestart() && (this.started || this.finished)) {
       this.restartGame();
     }
 
@@ -216,34 +295,46 @@ export class ThreeScene {
       // 1. Update boat physics with dual player input
       this.boat.update(dt, p1, p2, elapsedTime);
 
-      // 2. Riverbank collision check
+      // 2. Debounced Riverbank collision check
       const bankCol = this.river.checkRiverbankCollision(this.boat.x, this.boat.z);
       if (bankCol.collided) {
-        this.boat.deflect(bankCol.normalX, 0, 0.42);
-        this.boat.x += bankCol.normalX * (bankCol.penetration + 0.12);
-        this.cameraController.triggerShake(0.65);
+        const isNewImpact = this.boat.deflectBank(bankCol.normalX, elapsedTime);
+        this.boat.x += bankCol.normalX * (bankCol.penetration + 0.1);
+        if (isNewImpact) {
+          this.cameraController.triggerShake(0.5);
+        }
       }
 
-      // 3. Obstacle collision check
+      // 3. Debounced Obstacle collision check
       const obCol = this.river.checkObstacleCollisions(this.boat.x, this.boat.z, this.boat.radius);
       if (obCol.collided) {
-        this.boat.deflect(obCol.normalX, obCol.normalZ, 0.52);
-        this.boat.x += obCol.normalX * (obCol.penetration + 0.18);
-        this.boat.z += obCol.normalZ * (obCol.penetration + 0.18);
-        this.cameraController.triggerShake(0.85);
+        const isNewImpact = this.boat.deflectObstacle(
+          obCol.normalX,
+          obCol.normalZ,
+          obCol.obstacleId,
+          elapsedTime
+        );
+        this.boat.x += obCol.normalX * (obCol.penetration + 0.14);
+        this.boat.z += obCol.normalZ * (obCol.penetration + 0.14);
+        if (isNewImpact) {
+          this.cameraController.triggerShake(0.68);
+        }
+      } else {
+        this.boat.clearObstacleContact();
       }
 
-      // 4. Update HUD
+      // 4. Update HUD stats
       const raceSeconds = ((performance.now() - this.startTime) / 1000).toFixed(1);
       this.timeEl.textContent = `⏱ Time: ${raceSeconds}s`;
       this.hitsEl.textContent = `💥 Hits: ${this.boat.collisions}`;
       this.speedEl.textContent = `⚡ Speed: ${Math.abs(this.boat.speed * 4).toFixed(0)}`;
 
-      // 5. Finish condition check
+      // 5. Finish condition check (crossed finish line upstream)
       if (this.boat.z <= this.river.finishZ) {
         this.finished = true;
+        this.finalTime = raceSeconds;
         this.finishOverlay.style.display = "block";
-        this.finishTimeValEl.textContent = `${raceSeconds}s`;
+        this.finishTimeValEl.textContent = `${this.finalTime}s`;
         this.finishHitsValEl.textContent = `${this.boat.collisions}`;
 
         let rating = "🏆 Masters of the River! 🏆";
@@ -256,13 +347,13 @@ export class ThreeScene {
       }
     }
 
-    // River animations (water ripple & bobbing buoys)
+    // River animations (flowing water ripples & bobbing buoys)
     this.river.update(elapsedTime);
 
     // Dynamic third-person camera follow
     this.cameraController.update(this.boat, dt);
 
-    // Keep sunlight tracking boat region
+    // Keep sunlight tracking boat region for optimal shadow map coverage
     this.sunLight.position.set(this.boat.x - 25, 55, this.boat.z + 30);
 
     // Render 3D Scene
